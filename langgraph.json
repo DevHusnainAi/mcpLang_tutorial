@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "lead_flow_agent": "./src/app/entrypoint.py:lead_flow_agent"
+  },
+  "env": ".env"
+}
