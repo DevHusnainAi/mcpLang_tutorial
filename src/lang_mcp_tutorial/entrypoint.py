@@ -3,7 +3,7 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.func import entrypoint
 import os
 import logging
-from src.lead_flow_agent.state import LeadFlowAgentState
+from src.lang_mcp_tutorial.state import LangMCPAgentState
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 from langgraph.graph import add_messages
@@ -15,13 +15,11 @@ from langgraph.checkpoint.memory import MemorySaver
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-api_key="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"
-
-model = ChatOpenAI(model="gpt-4o-mini", api_key=api_key)
+model = ChatOpenAI(model="gpt-4o-mini")
 
 @entrypoint(checkpointer=MemorySaver())
-async def lead_flow_agent(state: LeadFlowAgentState) -> Dict[str, Any]:
-    print("Starting lead_flow_agent execution")
+async def lang_mcp_tutorial(state: LangMCPAgentState) -> Dict[str, Any]:
+    print("Starting lang_mcp_tutorial execution")
     client = MultiServerMCPClient()
     current_dir = os.path.dirname(os.path.abspath(__file__))
     print("State: ", state)
@@ -43,7 +41,7 @@ async def lead_flow_agent(state: LeadFlowAgentState) -> Dict[str, Any]:
         await client.connect_to_server(
             "math",
             command="python",
-            args=[os.path.join(current_dir, "maths_server.py")]
+            args=[os.path.join(current_dir, "mcp/maths/maths_server.py")]
         )
         print("Successfully connected to math server")
 
@@ -84,6 +82,7 @@ async def lead_flow_agent(state: LeadFlowAgentState) -> Dict[str, Any]:
             messages = state["messages"]
 
         print("Lead flow agent execution completed successfully", messages)
+        
         return {
             "messages": messages,
         }
@@ -102,4 +101,4 @@ async def lead_flow_agent(state: LeadFlowAgentState) -> Dict[str, Any]:
         await client.exit_stack.aclose()
         print("Client connection closed")
 
-lead_flow_agent.name = "lead_flow_agent" 
+lang_mcp_tutorial.name = "lang_mcp_tutorial" 

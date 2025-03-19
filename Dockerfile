@@ -1,10 +1,10 @@
 FROM langchain/langgraph-api:3.13
 
 # Add the source code to the container
-ADD . /deps/lead_flow_agent
+ADD . /deps/lang_mcp_tutorial
 
 # Set the working directory
-WORKDIR /deps/lead_flow_agent
+WORKDIR /deps/lang_mcp_tutorial
 
 # Upgrade pip
 RUN pip install --upgrade pip
@@ -13,6 +13,6 @@ RUN pip install --upgrade pip
 RUN PYTHONDONTWRITEBYTECODE=1 pip install --no-cache-dir -c /api/constraints.txt -e /deps/*
 
 # Set environment variables
-ENV LANGSERVE_GRAPHS='{"lead_flow_agent": "./src/lead_flow_agent/entrypoint.py:lead_flow_agent"}'
+ENV LANGSERVE_GRAPHS='{"lang_mcp_tutorial": "./src/lang_mcp_tutorial/entrypoint.py:lang_mcp_tutorial"}'
 
-WORKDIR /deps/lead_flow_agent
+WORKDIR /deps/lang_mcp_tutorial

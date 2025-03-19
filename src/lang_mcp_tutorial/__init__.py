@@ -4,6 +4,6 @@ This module defines a custom reasoning and action agent graph.
 It invokes tools in a simple loop.
 """
 
-from src.lead_flow_agent.entrypoint import lead_flow_agent
+from src.lang_mcp_tutorial.entrypoint import lang_mcp_tutorial
 
-__all__ = ["lead_flow_agent"]
+__all__ = ["lang_mcp_tutorial"]

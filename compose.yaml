@@ -34,7 +34,7 @@ services:
     volumes:
       - type: bind
         source: ./src
-        target: /deps/lead_flow_agent/src
+        target: /deps/lang_mcp_tutorial/src
     command: ["langgraph", "dev", "--port", "8000", "--watch"]
     environment:
       REDIS_URI: redis://langgraph-redis:6379
