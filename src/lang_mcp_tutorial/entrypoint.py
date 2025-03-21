@@ -5,11 +5,11 @@ import os
 import logging
 from src.lang_mcp_tutorial.state import LangMCPAgentState
 from langchain_openai import ChatOpenAI
-from langgraph.prebuilt import create_react_agent
 from langgraph.graph import add_messages
 from langchain_core.messages import ToolMessage, HumanMessage, AIMessage, BaseMessage
-from typing import Dict, Any, List
 from langgraph.checkpoint.memory import MemorySaver
+from src.lang_mcp_tutorial.tasks.workers import call_model
+import uuid
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -17,23 +17,71 @@ logger = logging.getLogger(__name__)
 
 model = ChatOpenAI(model="gpt-4o-mini")
 
-@entrypoint(checkpointer=MemorySaver())
-async def lang_mcp_tutorial(state: LangMCPAgentState) -> Dict[str, Any]:
+checkpointer = MemorySaver()
+
+def convert_to_message_object(msg):
+    """Convert a dictionary to a proper message object."""
+    if isinstance(msg, (AIMessage, HumanMessage, ToolMessage)):
+        return msg
+    
+    if isinstance(msg, dict):
+        if msg.get('type') == 'ai':
+            return AIMessage(
+                content=msg.get('content', ''),
+                additional_kwargs=msg.get('additional_kwargs', {}),
+                response_metadata=msg.get('response_metadata', {})
+            )
+        elif msg.get('type') == 'human':
+            return HumanMessage(
+                content=msg.get('content', ''),
+                additional_kwargs=msg.get('additional_kwargs', {}),
+                response_metadata=msg.get('response_metadata', {})
+            )
+        elif msg.get('type') == 'tool':
+            return ToolMessage(
+                content=msg.get('content', ''),
+                tool_call_id=msg.get('tool_call_id', str(uuid.uuid4())),
+                name=msg.get('name', 'unknown_tool'),
+                additional_kwargs=msg.get('additional_kwargs', {}),
+                response_metadata=msg.get('response_metadata', {})
+            )
+        elif msg.get('role') == 'assistant':
+            return AIMessage(content=msg.get('content', ''))
+        elif msg.get('role') == 'user':
+            return HumanMessage(content=msg.get('content', ''))
+        elif msg.get('role') == 'tool':
+            return ToolMessage(
+                content=msg.get('content', ''),
+                tool_call_id=msg.get('tool_call_id', str(uuid.uuid4())),
+                name=msg.get('name', 'unknown_tool')
+            )
+    return HumanMessage(content=str(msg))
+
+@entrypoint(checkpointer=checkpointer)
+async def lang_mcp_tutorial(state: LangMCPAgentState, *, previous: list[BaseMessage]):
+    # Convert previous messages if they exist
+    if previous:
+        if isinstance(previous, dict) and 'messages' in previous:
+            previous_messages = previous['messages']
+        else:
+            previous_messages = previous
+        
+        # Convert messages and add to state
+        converted_messages = [convert_to_message_object(msg) for msg in previous_messages]
+        state["messages"] = state.get("messages", []) + converted_messages
+
     print("Starting lang_mcp_tutorial execution")
     client = MultiServerMCPClient()
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    print("State: ", state)
-
-    message = state.get('messages', [])
-    last_message_content = None  # Initialize to None
-
-    if message and isinstance(message, list) and len(message) > 0:
-        last_message = message[-1]
-
-        if isinstance(last_message, dict) and 'content' in last_message:
-            last_message_content = last_message['content']
-        elif isinstance(last_message, str):
-            last_message_content = last_message
+    print("Initial state:", state)
+    
+    # Initialize messages if not present
+    if not state.get("messages"):
+        state["messages"] = []
+    
+    # Get current messages and convert them to proper message objects
+    current_messages = [convert_to_message_object(msg) for msg in state.get('messages', [])]
+    print("Current messages:", current_messages)
 
     try:
         # Connect to math server
@@ -45,57 +93,39 @@ async def lang_mcp_tutorial(state: LangMCPAgentState) -> Dict[str, Any]:
         )
         print("Successfully connected to math server")
 
-        # Create the agent
-        print("Creating react agent...")
-        agent = create_react_agent(model, client.get_tools())
-        print("React agent created successfully")
+        await client.connect_to_server(
+            "postgres_db",
+            command="python",
+            args=[os.path.join(current_dir, "mcp/database/db_server.py")]
+        )
+        print("Successfully connected to database server")
 
-        # Invoke the agent with the formatted message
-        print("Invoking agent with message...")
-        response = await agent.ainvoke({"messages": last_message_content})
-        print("Agent response received", response)
-        
-        if response is not None and "messages" in response and isinstance(response["messages"], list):
-            # Extract the messages from the response
-            new_messages = response["messages"]
+        # Call the model with proper async handling and full message history
+        response = await call_model(messages=current_messages, client=client)
+        print("Model response:", response)
 
-            # Convert the dictionaries to message objects
-            message_objects: List[BaseMessage] = []
-
-            for msg in new_messages:
-                if isinstance(msg, dict): # check if the msg is a dictionary.
-                    if msg["type"] == "ai":
-                        message_objects.append(AIMessage(content=msg["content"], additional_kwargs=msg["additional_kwargs"], response_metadata=msg["response_metadata"], tool_calls = msg.get("tool_calls",[])))
-                    elif msg["type"] == "human":
-                        message_objects.append(HumanMessage(content=msg["content"], additional_kwargs=msg["additional_kwargs"], response_metadata=msg["response_metadata"]))
-                    elif msg["type"] == "tool":
-                        message_objects.append(ToolMessage(content=msg["content"], additional_kwargs=msg["additional_kwargs"], response_metadata=msg["response_metadata"], tool_call_id=msg["tool_call_id"]))
-                elif isinstance(msg, AIMessage):
-                    message_objects.append(msg)
-                elif isinstance(msg, HumanMessage):
-                    message_objects.append(msg)
-                elif isinstance(msg, ToolMessage):
-                    message_objects.append(msg)
-
-            messages = add_messages(state["messages"], message_objects)
+        # Process response and update messages
+        if response is not None:
+            if isinstance(response, dict) and 'messages' in response:
+                new_messages = [convert_to_message_object(msg) for msg in response['messages']]
+            else:
+                new_messages = [convert_to_message_object(response)]
+            
+            # Update state with new messages
+            state["messages"] = state.get("messages", []) + new_messages
+            
+            return entrypoint.final(value={"messages": new_messages}, save=state)
         else:
-            messages = state["messages"]
-
-        print("Lead flow agent execution completed successfully", messages)
-        
-        return {
-            "messages": messages,
-        }
+            return entrypoint.final(value={"messages": current_messages}, save=state)
 
     except Exception as e:
         logger.error(f"Error in lead_flow_agent: {str(e)}", exc_info=True)
         error_message = AIMessage(content=f"Error occurred: {str(e)}")
-        messages = add_messages(state["messages"], [error_message])
-        return {
-            "messages": messages,
-            "status": "error",
-            "error": str(e)
-        }
+        state["messages"] = state.get("messages", []) + [error_message]
+        return entrypoint.final(
+            value={"messages": [error_message]},
+            save=state
+        )
     finally:
         print("Closing client connection...")
         await client.exit_stack.aclose()

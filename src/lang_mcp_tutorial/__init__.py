@@ -1,4 +1,4 @@
-"""Lead Flow Agent.
+"""MCP + LANGGRAPH TUTORIAL.
 
 This module defines a custom reasoning and action agent graph.
 It invokes tools in a simple loop.
