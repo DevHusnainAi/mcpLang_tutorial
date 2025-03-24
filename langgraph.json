@@ -1,7 +1,7 @@
 {
   "dependencies": ["."],
   "graphs": {
-    "lead_flow_agent": "./src/app/entrypoint.py:lead_flow_agent"
+    "lead_flow_agent": "./src/lang_mcp_tutorial/entrypoint.py:lang_mcp_tutorial"
   },
   "env": ".env"
 }

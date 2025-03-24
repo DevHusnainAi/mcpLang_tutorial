@@ -87,18 +87,18 @@ async def lang_mcp_tutorial(state: LangMCPAgentState, *, previous: list[BaseMess
         # Connect to math server
         print("Connecting to math server...")
         await client.connect_to_server(
-            "math",
+            "math", 
             command="python",
             args=[os.path.join(current_dir, "mcp/maths/maths_server.py")]
         )
         print("Successfully connected to math server")
-
+        print("Connecting to db server...")
         await client.connect_to_server(
-            "postgres_db",
+            "database", 
             command="python",
             args=[os.path.join(current_dir, "mcp/database/db_server.py")]
         )
-        print("Successfully connected to database server")
+        print("Successfully connected to db server")
 
         # Call the model with proper async handling and full message history
         response = await call_model(messages=current_messages, client=client)
